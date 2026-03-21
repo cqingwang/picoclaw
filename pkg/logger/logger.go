@@ -49,11 +49,33 @@ func init() {
 
 			// Custom formatter to handle multiline strings and JSON objects
 			FormatFieldValue: formatFieldValue,
+			FormatCaller:     formatCaller,
 		}
 
 		logger = zerolog.New(consoleWriter).With().Timestamp().Caller().Logger()
 		fileLogger = zerolog.Logger{}
 	})
+}
+
+// formatCaller extracts the relative path from the full file path
+func formatCaller(i interface{}) string {
+	var s string
+	switch v := i.(type) {
+	case string:
+		s = v
+	case []byte:
+		s = string(v)
+	default:
+		return fmt.Sprintf("%v", i)
+	}
+
+	// Find "/picoclaw/" and keep only the part after it
+	if idx := strings.Index(s, "/picoclaw/"); idx != -1 {
+		return s[idx+len("/picoclaw/"):]
+	}
+
+	// Fallback: return basename only
+	return filepath.Base(s)
 }
 
 func formatFieldValue(i any) string {
