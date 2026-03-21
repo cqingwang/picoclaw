@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -164,16 +165,85 @@ func buildShellEnv() []string {
 	// Start with current process environment
 	env := os.Environ()
 
-	// Try to get environment as if we sourced the shell config
-	// This runs a subshell to capture the environment from an interactive shell
+	// Parse current environment into a map for easy manipulation
+	envMap := make(map[string]string)
+	var pathValue string
+	for _, e := range env {
+		parts := strings.SplitN(e, "=", 2)
+		if len(parts) == 2 {
+			envMap[parts[0]] = parts[1]
+			if parts[0] == "PATH" {
+				pathValue = parts[1]
+			}
+		}
+	}
+
+	// Ensure standard macOS/Unix paths are included in PATH
+	standardPaths := []string{"/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"}
+	if pathValue != "" {
+		existingPaths := strings.Split(pathValue, ":")
+		existingPathSet := make(map[string]bool)
+		for _, p := range existingPaths {
+			if p != "" {
+				existingPathSet[p] = true
+			}
+		}
+		// Prepend standard paths that are not already in PATH
+		var newPathParts []string
+		for _, sp := range standardPaths {
+			if !existingPathSet[sp] {
+				newPathParts = append(newPathParts, sp)
+			}
+		}
+		// Add existing paths after standard paths
+		newPathParts = append(newPathParts, strings.Split(pathValue, ":")...)
+		pathValue = strings.Join(newPathParts, ":")
+	} else {
+		pathValue = strings.Join(standardPaths, ":")
+	}
+	envMap["PATH"] = pathValue
+
+	// Try to source shell config files directly if they exist
 	shell := os.Getenv("SHELL")
 	if shell == "" {
 		shell = "/bin/zsh" // Default to zsh on macOS
 	}
 
+	// Build command to source config files and output environment
+	// Try .zshrc first, then .bashrc, then .profile
+	var sourceCmd string
+	homeDir, _ := os.UserHomeDir()
+	if homeDir != "" {
+		var sourceFiles []string
+		zshrc := filepath.Join(homeDir, ".zshrc")
+		bashrc := filepath.Join(homeDir, ".bashrc")
+		profile := filepath.Join(homeDir, ".profile")
+		bashProfile := filepath.Join(homeDir, ".bash_profile")
+
+		if _, err := os.Stat(zshrc); err == nil && strings.HasSuffix(shell, "zsh") {
+			sourceFiles = append(sourceFiles, zshrc)
+		}
+		if _, err := os.Stat(bashrc); err == nil && (strings.HasSuffix(shell, "bash") || len(sourceFiles) == 0) {
+			sourceFiles = append(sourceFiles, bashrc)
+		}
+		if _, err := os.Stat(profile); err == nil && len(sourceFiles) == 0 {
+			sourceFiles = append(sourceFiles, profile)
+		}
+		if _, err := os.Stat(bashProfile); err == nil && len(sourceFiles) == 0 {
+			sourceFiles = append(sourceFiles, bashProfile)
+		}
+
+		if len(sourceFiles) > 0 {
+			for _, f := range sourceFiles {
+				sourceCmd += fmt.Sprintf("[ -f %q ] && . %q; ", f, f)
+			}
+			sourceCmd += "env"
+		}
+	}
+
 	// Use interactive shell to load profile files (.zshrc, .bash_profile, etc.)
-	cmd := exec.Command(shell, "-ic", "env")
-	cmd.Env = env
+	cmd := exec.Command(shell, "-ic", sourceCmd)
+	cmd.Env = os.Environ() // Use original env, not modified one
 	output, err := cmd.Output()
 	if err == nil && len(output) > 0 {
 		// Parse the output into environment variables
@@ -189,7 +259,51 @@ func buildShellEnv() []string {
 		}
 	}
 
-	return env
+	// Final fallback: ensure PATH has standard paths even if shell command failed
+	// Re-parse env to ensure PATH is correct
+	finalEnvMap := make(map[string]string)
+	var finalHasPath bool
+	for _, e := range env {
+		parts := strings.SplitN(e, "=", 2)
+		if len(parts) == 2 {
+			finalEnvMap[parts[0]] = parts[1]
+			if parts[0] == "PATH" {
+				finalHasPath = true
+			}
+		}
+	}
+
+	if finalHasPath {
+		currentPath := finalEnvMap["PATH"]
+		existingPaths := strings.Split(currentPath, ":")
+		existingPathSet := make(map[string]bool)
+		for _, p := range existingPaths {
+			if p != "" {
+				existingPathSet[p] = true
+			}
+		}
+		// Prepend standard paths that are not already in PATH
+		var newPathParts []string
+		for _, sp := range standardPaths {
+			if !existingPathSet[sp] {
+				newPathParts = append(newPathParts, sp)
+			}
+		}
+		newPathParts = append(newPathParts, strings.Split(currentPath, ":")...)
+		finalEnvMap["PATH"] = strings.Join(newPathParts, ":")
+	} else {
+		finalEnvMap["PATH"] = pathValue
+	}
+
+	// Convert map back to slice
+	finalEnv := make([]string, 0, len(finalEnvMap))
+	for k, v := range finalEnvMap {
+		info := fmt.Sprintf("%s=%s", k, v)
+		//logger.InfoC("env_red", info)
+		finalEnv = append(finalEnv, info)
+	}
+
+	return finalEnv
 }
 
 // ExecuteWithContext executes a tool with channel/chatID context and optional async callback.
