@@ -23,6 +23,7 @@ type toolCtxKey struct{ name string }
 var (
 	ctxKeyChannel = &toolCtxKey{"channel"}
 	ctxKeyChatID  = &toolCtxKey{"chatID"}
+	ctxKeyEnv     = &toolCtxKey{"env"}
 )
 
 // WithToolContext returns a child context carrying channel and chatID.
@@ -42,6 +43,25 @@ func ToolChannel(ctx context.Context) string {
 func ToolChatID(ctx context.Context) string {
 	v, _ := ctx.Value(ctxKeyChatID).(string)
 	return v
+}
+
+// WithToolEnv returns a child context carrying environment variables.
+// This is used to pass shell environment (PATH, HOME, etc.) to tools.
+func WithToolEnv(ctx context.Context, env []string) context.Context {
+	return context.WithValue(ctx, ctxKeyEnv, env)
+}
+
+// ToolEnv extracts environment variables from ctx, or nil if unset.
+// Returns a copy to prevent accidental modification.
+func ToolEnv(ctx context.Context) []string {
+	v, _ := ctx.Value(ctxKeyEnv).([]string)
+	if v == nil {
+		return nil
+	}
+	// Return a copy to prevent accidental modification
+	result := make([]string, len(v))
+	copy(result, v)
+	return result
 }
 
 // AsyncCallback is a function type that async tools use to notify completion.

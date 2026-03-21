@@ -3,7 +3,10 @@ package tools
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -154,6 +157,41 @@ func (r *ToolRegistry) Execute(ctx context.Context, name string, args map[string
 	return r.ExecuteWithContext(ctx, name, args, "", "", nil)
 }
 
+// buildShellEnv builds a complete shell environment similar to `source ~/.zshrc`.
+// It runs an interactive shell to capture the full environment with all PATH
+// extensions and shell-specific variables.
+func buildShellEnv() []string {
+	// Start with current process environment
+	env := os.Environ()
+
+	// Try to get environment as if we sourced the shell config
+	// This runs a subshell to capture the environment from an interactive shell
+	shell := os.Getenv("SHELL")
+	if shell == "" {
+		shell = "/bin/zsh" // Default to zsh on macOS
+	}
+
+	// Use interactive shell to load profile files (.zshrc, .bash_profile, etc.)
+	cmd := exec.Command(shell, "-ic", "env")
+	cmd.Env = env
+	output, err := cmd.Output()
+	if err == nil && len(output) > 0 {
+		// Parse the output into environment variables
+		lines := string(output)
+		parsedEnv := make([]string, 0)
+		for _, line := range strings.Split(lines, "\n") {
+			if line != "" && strings.Contains(line, "=") {
+				parsedEnv = append(parsedEnv, line)
+			}
+		}
+		if len(parsedEnv) > 0 {
+			env = parsedEnv
+		}
+	}
+
+	return env
+}
+
 // ExecuteWithContext executes a tool with channel/chatID context and optional async callback.
 // If the tool implements AsyncExecutor and a non-nil callback is provided,
 // ExecuteAsync is called instead of Execute — the callback is a parameter,
@@ -183,6 +221,11 @@ func (r *ToolRegistry) ExecuteWithContext(
 	// Inject channel/chatID into ctx so tools read them via ToolChannel(ctx)/ToolChatID(ctx).
 	// Always inject — tools validate what they require.
 	ctx = WithToolContext(ctx, channel, chatID)
+
+	// Inject shell environment into ctx so tools can access full environment
+	// (similar to `source ~/.zshrc`). This ensures commands like npm, go, etc.
+	// can be found in PATH and other shell-specific variables are available.
+	ctx = WithToolEnv(ctx, buildShellEnv())
 
 	// If tool implements AsyncExecutor and callback is provided, use ExecuteAsync.
 	// The callback is a call parameter, not mutable state on the tool instance.

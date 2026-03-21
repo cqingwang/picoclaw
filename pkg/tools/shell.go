@@ -273,6 +273,14 @@ func (t *ExecTool) Execute(ctx context.Context, args map[string]any) *ToolResult
 		cmd.Dir = cwd
 	}
 
+	// Inject environment variables from context (similar to `source ~/.zshrc`)
+	// This ensures PATH and other shell variables are available
+	if env := ToolEnv(ctx); env != nil {
+		cmd.Env = env
+	} else {
+		cmd.Env = os.Environ()
+	}
+
 	prepareCommandForTermination(cmd)
 
 	var stdout, stderr bytes.Buffer
