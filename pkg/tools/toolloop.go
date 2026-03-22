@@ -77,10 +77,10 @@ func RunToolLoop(
 		// 4. If no tool calls, we're done
 		if len(response.ToolCalls) == 0 {
 			finalContent = response.Content
-			logger.InfoCF("toolloop", "LLM response without tool calls (direct answer)",
+			logger.InfoCF("toolloop", "LLM|direct answer",
 				map[string]any{
 					"iteration":     iteration,
-					"content_chars": len(finalContent),
+					"chars": len(finalContent),
 				})
 			break
 		}
@@ -95,11 +95,11 @@ func RunToolLoop(
 		for _, tc := range normalizedToolCalls {
 			toolNames = append(toolNames, tc.Name)
 		}
-		logger.InfoCF("toolloop", "LLM requested tool calls",
+		logger.InfoCF("toolloop", "LLM|call",
 			map[string]any{
 				"tools":     toolNames,
 				"count":     len(normalizedToolCalls),
-				"iteration": iteration,
+				"iter": iteration,
 			})
 
 		// 6. Build assistant message with tool calls

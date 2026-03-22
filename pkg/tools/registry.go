@@ -317,7 +317,7 @@ func (r *ToolRegistry) ExecuteWithContext(
 	channel, chatID string,
 	asyncCallback AsyncCallback,
 ) *ToolResult {
-	logger.InfoCF("tool", "Tool execution started",
+	logger.InfoCF("tool", "tool|exec_start",
 		map[string]any{
 			"tool": name,
 			"args": args,
@@ -325,7 +325,7 @@ func (r *ToolRegistry) ExecuteWithContext(
 
 	tool, ok := r.Get(name)
 	if !ok {
-		logger.ErrorCF("tool", "Tool not found",
+		logger.ErrorCF("tool", "tool|not found",
 			map[string]any{
 				"tool": name,
 			})
@@ -391,24 +391,24 @@ func (r *ToolRegistry) ExecuteWithContext(
 
 	// Log based on result type
 	if result.IsError {
-		logger.ErrorCF("tool", "Tool execution failed",
+		logger.ErrorCF("tool", "tool|exec_failed",
 			map[string]any{
 				"tool":     name,
-				"duration": duration.Milliseconds(),
+				"lapse": duration.Milliseconds(),
 				"error":    result.ForLLM,
 			})
 	} else if result.Async {
-		logger.InfoCF("tool", "Tool started (async)",
+		logger.InfoCF("tool", "tool|async_start",
 			map[string]any{
 				"tool":     name,
 				"duration": duration.Milliseconds(),
 			})
 	} else {
-		logger.InfoCF("tool", "Tool execution completed",
+		logger.InfoCF("tool", "tool|exec_done",
 			map[string]any{
 				"tool":          name,
-				"duration_ms":   duration.Milliseconds(),
-				"result_length": len(result.ForLLM),
+				"lapse_ms":   duration.Milliseconds(),
+				"ret_len": len(result.ForLLM),
 			})
 	}
 

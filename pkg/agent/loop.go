@@ -713,7 +713,7 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 	}
 	logger.InfoCF(
 		"agent",
-		fmt.Sprintf("Processing message from %s:%s: %s", msg.Channel, msg.SenderID, logContent),
+		fmt.Sprintf("Processing %s:%s: %s", msg.Channel, msg.SenderID, logContent),
 		map[string]any{
 			"channel":     msg.Channel,
 			"chat_id":     msg.ChatID,
@@ -754,12 +754,12 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 
 	logger.InfoCF("agent", "Routed message",
 		map[string]any{
-			"agent_id":      agent.ID,
+			"agent":      agent.ID,
 			"scope_key":     scopeKey,
 			"session_key":   sessionKey,
 			"matched_by":    route.MatchedBy,
-			"route_agent":   route.AgentID,
-			"route_channel": route.Channel,
+			"to_agent":   route.AgentID,
+			"to_channel": route.Channel,
 		})
 
 	opts := processOptions{
@@ -960,10 +960,10 @@ func (al *AgentLoop) runAgentLoop(
 	responsePreview := utils.Truncate(finalContent, 120)
 	logger.InfoCF("agent", fmt.Sprintf("Response: %s", responsePreview),
 		map[string]any{
-			"agent_id":     agent.ID,
-			"session_key":  opts.SessionKey,
-			"iterations":   iteration,
-			"final_length": len(finalContent),
+			"agent":     agent.ID,
+			"session":  opts.SessionKey,
+			"iter":   iteration,
+			"final_len": len(finalContent),
 		})
 
 	return finalContent, nil
@@ -1227,11 +1227,11 @@ func (al *AgentLoop) runLLMIteration(
 			al.targetReasoningChannelID(opts.Channel),
 		)
 
-		logger.DebugCF("agent", "LLM response",
+		logger.DebugCF("agent", "LLM|response",
 			map[string]any{
 				"agent_id":       agent.ID,
-				"iteration":      iteration,
-				"content_chars":  len(response.Content),
+				"iter":      iteration,
+				"chars":  len(response.Content),
 				"tool_calls":     len(response.ToolCalls),
 				"reasoning":      response.Reasoning,
 				"target_channel": al.targetReasoningChannelID(opts.Channel),
@@ -1243,11 +1243,11 @@ func (al *AgentLoop) runLLMIteration(
 			if finalContent == "" && response.ReasoningContent != "" {
 				finalContent = response.ReasoningContent
 			}
-			logger.InfoCF("agent", "LLM response without tool calls (direct answer)",
+			logger.InfoCF("agent", "LLM|direct answer",
 				map[string]any{
-					"agent_id":      agent.ID,
+					"agent":      agent.ID,
 					"iteration":     iteration,
-					"content_chars": len(finalContent),
+					"chars": len(finalContent),
 				})
 			break
 		}
@@ -1262,12 +1262,12 @@ func (al *AgentLoop) runLLMIteration(
 		for _, tc := range normalizedToolCalls {
 			toolNames = append(toolNames, tc.Name)
 		}
-		logger.InfoCF("agent", "LLM requested tool calls",
+		logger.InfoCF("agent", "LLM|call",
 			map[string]any{
-				"agent_id":  agent.ID,
+				"agent":  agent.ID,
 				"tools":     toolNames,
 				"count":     len(normalizedToolCalls),
-				"iteration": iteration,
+				"iter": iteration,
 			})
 
 		// Build assistant message with tool calls
@@ -1321,11 +1321,11 @@ func (al *AgentLoop) runLLMIteration(
 
 				argsJSON, _ := json.Marshal(tc.Arguments)
 				argsPreview := utils.Truncate(string(argsJSON), 200)
-				logger.InfoCF("agent", fmt.Sprintf("Tool call: %s(%s)", tc.Name, argsPreview),
+				logger.InfoCF("agent", fmt.Sprintf("call: %s(%s)", tc.Name, argsPreview),
 					map[string]any{
-						"agent_id":  agent.ID,
+						"agent":  agent.ID,
 						"tool":      tc.Name,
-						"iteration": iteration,
+						"iter": iteration,
 					})
 
 				// Send tool feedback to chat channel if enabled

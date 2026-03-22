@@ -69,13 +69,19 @@ func formatCaller(i interface{}) string {
 		return fmt.Sprintf("%v", i)
 	}
 
-	// Find "/picoclaw/" and keep only the part after it
-	if idx := strings.Index(s, "/picoclaw/"); idx != -1 {
-		return s[idx+len("/picoclaw/"):]
+	var result string
+	if idx := strings.LastIndex(s, "/"); idx != -1 {
+		result = s[idx+1:]
+	} else {
+		result = s
 	}
-
-	// Fallback: return basename only
-	return filepath.Base(s)
+	// 固定长度为 16 位，不足部分在末尾添加空格填充
+	if len(result) < 16 {
+		result = result + strings.Repeat(" ", 16-len(result))
+	} else if len(result) > 16 {
+		result = result[:16]
+	}
+	return result
 }
 
 func formatFieldValue(i any) string {
@@ -220,7 +226,7 @@ func logMessage(level LogLevel, component string, message string, fields map[str
 	event := getEvent(logger, level)
 
 	if component != "" {
-		event.Str("component", component)
+		event.Str("com", component)
 	}
 
 	appendFields(event, fields)
@@ -231,7 +237,7 @@ func logMessage(level LogLevel, component string, message string, fields map[str
 		fileEvent := getEvent(fileLogger, level)
 
 		if component != "" {
-			fileEvent.Str("component", component)
+			fileEvent.Str("com", component)
 		}
 		// fileEvent.Str("caller", fmt.Sprintf("%s:%d (%s)", callerFile, callerLine, callerFunc))
 
